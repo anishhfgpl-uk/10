@@ -48,41 +48,16 @@ function loadDatabase(): CloudDatabase {
     activeCompanyId: 'comp_01',
     companies: SEED_COMPANIES,
     groups: {
-      comp_01: SEED_GROUPS,
-      comp_02: [
-        {
-          id: 'grp_all',
-          name: 'Sundry Debtors (All)',
-          ledgerCount: 4,
-          totalBalance: 2450000,
-          overdueBalance: 890000,
-        },
-      ],
+      // Start with no demo records. Real records arrive only from the office Tally sync.
+      comp_01: [],
+      comp_02: [],
     },
     ledgers: {
-      comp_01: SEED_LEDGERS,
-      comp_02: [
-        {
-          id: 'led_apex_01',
-          name: 'Infosys BPM Vendor Accounts',
-          groupId: 'grp_all',
-          groupName: 'Sundry Debtors',
-          gstin: '29AAACI1234P1Z4',
-          creditLimit: 1500000,
-          creditPeriodDays: 45,
-          openingBalance: 250000,
-          currentBalance: 980000,
-          overdueAmount: 450000,
-          totalDebits: 1450000,
-          totalCredits: 720000,
-          activeBillsCount: 2,
-          lastInvoiceDate: '2025-01-20',
-          lastPaymentDate: '2025-01-10',
-        },
-      ],
+      comp_01: [],
+      comp_02: [],
     },
     vouchers: {
-      comp_01: SEED_VOUCHERS,
+      comp_01: [],
       comp_02: [],
     },
   };
@@ -494,27 +469,11 @@ app.post('/api/tally/sync', (req: Request, res: Response) => {
 
   const compId = targetCompany.id;
 
-  // Upsert or Merge groups
-  if (importedData.groups && importedData.groups.length > 0) {
-    const existingGroups = db.groups[compId] || [];
-    const grpMap = new Map(existingGroups.map((g) => [g.id, g]));
-    importedData.groups.forEach((g) => grpMap.set(g.id, g));
-    db.groups[compId] = Array.from(grpMap.values());
-  }
-
-  // Upsert Ledgers
-  const existingLedgers = db.ledgers[compId] || [];
-  const ledMap = new Map(existingLedgers.map((l) => [l.id, l]));
-  importedData.ledgers.forEach((l) => ledMap.set(l.id, l));
-  db.ledgers[compId] = Array.from(ledMap.values());
-
-  // Upsert Vouchers
-  if (importedData.vouchers && importedData.vouchers.length > 0) {
-    const existingVchs = db.vouchers[compId] || [];
-    const vchMap = new Map(existingVchs.map((v) => [v.id, v]));
-    importedData.vouchers.forEach((v) => vchMap.set(v.id, v));
-    db.vouchers[compId] = Array.from(vchMap.values());
-  }
+  // Replace the selected company's snapshot with the latest Tally import.
+  // This prevents demo/stale ledgers or vouchers from being mixed into real accounts.
+  db.groups[compId] = importedData.groups || [];
+  db.ledgers[compId] = importedData.ledgers;
+  db.vouchers[compId] = importedData.vouchers || [];
 
   saveDatabase(db);
 
