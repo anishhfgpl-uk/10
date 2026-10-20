@@ -643,8 +643,15 @@ def sync_tally():
         'x-sync-source': 'Office Tally Auto-Sync (Python Agent)'
     }
     
+    # Compress the large XML payload before uploading; the cloud server transparently
+    # decompresses Content-Encoding: gzip before parsing the XML.
+    import gzip
+    raw_payload = combined_xml.encode('utf-8')
+    compressed_payload = gzip.compress(raw_payload, compresslevel=1)
+    headers['Content-Encoding'] = 'gzip'
+    print(f"Uploading {len(raw_payload):,} XML bytes as {len(compressed_payload):,} compressed bytes...")
     try:
-        cloud_resp = requests.post(CLOUD_SYNC_URL, data=combined_xml.encode('utf-8'), headers=headers, timeout=300)
+        cloud_resp = requests.post(CLOUD_SYNC_URL, data=compressed_payload, headers=headers, timeout=300)
     except Exception as e:
         print(f"[FAILED] Cloud upload request error: {type(e).__name__}: {e}")
         print("The reports were received from Tally, but cloud upload did not complete.")
