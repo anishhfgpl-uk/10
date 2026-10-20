@@ -3,17 +3,17 @@ import { Company, DebtorGroup, DebtorLedger, TallyVoucher } from '../types/tally
 export const SEED_COMPANIES: Company[] = [
   {
     id: 'comp_01',
-    name: 'Shree Ganesh Textiles Pvt Ltd',
-    gstin: '24AAACG1234F1Z8',
-    address: 'Plot 42, Ring Road Industrial Estate, Surat, Gujarat - 395002',
-    phone: '+91 261 245 8890',
-    email: 'accounts@shreeganeshtextiles.com',
+    name: 'BHARAT ENTERPRISES',
+    gstin: '',
+    address: '',
+    phone: '',
+    email: '',
     financialYearStart: '2024-04-01',
     financialYearEnd: '2025-03-31',
     currency: '₹',
     lastSyncedAt: '2025-02-14T10:45:00Z',
     syncSource: 'Office Accounts PC (Tally Prime 4.1)',
-    apiKey: 'tally_live_key_98a72b61f84c',
+    apiKey: 'tally_bharat_enterprises_sync_2026',
   },
   {
     id: 'comp_02',
