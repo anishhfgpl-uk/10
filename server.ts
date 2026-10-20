@@ -14,9 +14,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware for parsing JSON and large XML/text bodies
-app.use(express.json({ limit: '50mb' }));
-app.use(express.text({ type: ['application/xml', 'text/xml'], limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '150mb' }));
+app.use(express.text({ type: ['application/xml', 'text/xml'], limit: '150mb' }));
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 
 // Cloud Data Store
 const DATA_DIR = path.join(__dirname, 'data');
@@ -643,13 +643,18 @@ def sync_tally():
         'x-sync-source': 'Office Tally Auto-Sync (Python Agent)'
     }
     
-    cloud_resp = requests.post(CLOUD_SYNC_URL, data=combined_xml.encode('utf-8'), headers=headers, timeout=120)
+    try:
+        cloud_resp = requests.post(CLOUD_SYNC_URL, data=combined_xml.encode('utf-8'), headers=headers, timeout=300)
+    except Exception as e:
+        print(f"[FAILED] Cloud upload request error: {type(e).__name__}: {e}")
+        print("The reports were received from Tally, but cloud upload did not complete.")
+        return False
     if cloud_resp.status_code == 200:
         print("[SUCCESS] Synced successfully to cloud!")
         print(cloud_resp.text)
         return True
     else:
-        print(f"[FAILED] Cloud sync error {cloud_resp.status_code}: {cloud_resp.text}")
+        print(f"[FAILED] Cloud sync error {cloud_resp.status_code}: {cloud_resp.text[:2000]}")
         return False
 
 if __name__ == '__main__':
