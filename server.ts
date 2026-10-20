@@ -648,7 +648,7 @@ def make_report_request(report_name, include_vouchers=False):
   <BODY><EXPORTDATA><REQUESTDESC>
     <REPORTNAME>{report_name}</REPORTNAME>
     <STATICVARIABLES>
-      <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>{voucher_flags}
+      <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>{voucher_flags}
     </STATICVARIABLES>
   </REQUESTDESC></EXPORTDATA></BODY>
 </ENVELOPE>'''
