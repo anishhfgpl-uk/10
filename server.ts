@@ -639,48 +639,52 @@ TALLY_URL = "http://localhost:9000"
 CLOUD_SYNC_URL = "${syncUrl}"
 API_KEY = "${company.apiKey}"
 
-XML_REQUEST_VOUCHERS = '''<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Voucher Register</REPORTNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+def make_report_request(report_name, include_vouchers=False):
+    voucher_flags = """
           <EXPLODEFLAG>Yes</EXPLODEFLAG>
-          <ISVCHTYPE>Yes</ISVCHTYPE>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-    </EXPORTDATA>
-  </BODY>
+          <ISVCHTYPE>Yes</ISVCHTYPE>""" if include_vouchers else ""
+    return f'''<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>{report_name}</REPORTNAME>
+    <STATICVARIABLES>
+      <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>{voucher_flags}
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY>
 </ENVELOPE>'''
 
 def sync_tally():
     print("Connecting to local/office Tally at " + TALLY_URL + "...")
     try:
-        tally_response = requests.post(
-            TALLY_URL, 
-            data=XML_REQUEST_VOUCHERS.encode('utf-8'),
-            headers={'Content-Type': 'text/xml'},
-            timeout=30
-        )
+        reports = []
+        for report_name in ("List of Accounts", "Voucher Register", "Group Summary"):
+            response = requests.post(
+                TALLY_URL,
+                data=make_report_request(report_name, report_name == "Voucher Register").encode('utf-8'),
+                headers={'Content-Type': 'text/xml'},
+                timeout=60
+            )
+            response.raise_for_status()
+            xml = response.text
+            if "<LINEERROR>" in xml.upper():
+                print(f"[ERROR] Tally returned an error for {report_name}: {xml[:500]}")
+                return False
+            reports.append(xml)
+            print(f"Received {report_name}: {len(response.content)} bytes")
     except Exception as e:
-        print(f"[ERROR] Could not connect to Tally: {e}")
-        print("Please ensure Tally is open and ODBC / XML Server is enabled on port 9000 (F12 > Advanced Config).")
+        print(f"[ERROR] Could not retrieve all required Tally reports: {e}")
+        print("Please ensure the intended company is open in Tally and its XML server is enabled on port 9000.")
         return False
 
-    print("Extracting XML payload from Tally (" + str(len(tally_response.content)) + " bytes)...")
-    
-    print("Syncing data to Cloud Platform: " + CLOUD_SYNC_URL + "...")
+    combined_xml = "\\n".join(reports)
+    print("Syncing account, voucher, and opening/closing balance reports to Cloud Platform: " + CLOUD_SYNC_URL + "...")
     headers = {
         'Content-Type': 'application/xml',
         'x-tally-api-key': API_KEY,
         'x-sync-source': 'Office Tally Auto-Sync (Python Agent)'
     }
     
-    cloud_resp = requests.post(CLOUD_SYNC_URL, data=tally_response.content, headers=headers, timeout=60)
+    cloud_resp = requests.post(CLOUD_SYNC_URL, data=combined_xml.encode('utf-8'), headers=headers, timeout=120)
     if cloud_resp.status_code == 200:
         print("[SUCCESS] Synced successfully to cloud!")
         print(cloud_resp.text)
@@ -698,30 +702,38 @@ $TallyUrl = "http://localhost:9000"
 $CloudUrl = "${syncUrl}"
 $ApiKey = "${company.apiKey}"
 
-Write-Host "Extracting Debtors & Vouchers from Tally Prime (port 9000)..." -ForegroundColor Cyan
+Write-Host "Extracting account masters, vouchers, and group balances from Tally Prime..." -ForegroundColor Cyan
 
-$TallyReq = @"
+function Get-TallyReport([string]$ReportName, [bool]$IncludeVouchers = $false) {
+  $voucherFlags = if ($IncludeVouchers) { "<EXPLODEFLAG>Yes</EXPLODEFLAG><ISVCHTYPE>Yes</ISVCHTYPE>" } else { "" }
+  $request = @"
 <ENVELOPE>
   <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
-  <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Day Book</REPORTNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>\$\$SysName:XML</SVEXPORTFORMAT>
-          <EXPLODEFLAG>Yes</EXPLODEFLAG>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-    </EXPORTDATA>
-  </BODY>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>$ReportName</REPORTNAME>
+    <STATICVARIABLES>
+      <SVEXPORTFORMAT>\$\$SysName:XML</SVEXPORTFORMAT>
+      $voucherFlags
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY>
 </ENVELOPE>
 "@
+  $result = Invoke-WebRequest -Uri $TallyUrl -Method Post -Body $request -ContentType "text/xml" -TimeoutSec 60
+  if ($result.Content -match "<LINEERROR>") { throw "Tally error in $ReportName report: $($result.Content.Substring(0, [Math]::Min(400, $result.Content.Length)))" }
+  return $result.Content
+}
 
 try {
-  $response = Invoke-RestMethod -Uri $TallyUrl -Method Post -Body $TallyReq -ContentType "text/xml"
-  Write-Host "Received data from Tally. Pushing to Cloud..." -ForegroundColor Yellow
+  $accountsXml = Get-TallyReport "List of Accounts"
+  Write-Host "Accounts report received." -ForegroundColor Green
+  $vouchersXml = Get-TallyReport "Voucher Register" $true
+  Write-Host "Voucher Register received." -ForegroundColor Green
+  $groupSummaryXml = Get-TallyReport "Group Summary"
+  Write-Host "Group Summary (opening/closing balances) received." -ForegroundColor Green
 
-  $cloudResp = Invoke-RestMethod -Uri $CloudUrl -Method Post -Body $response -Headers @{ "x-tally-api-key" = $ApiKey; "x-sync-source" = "Office PC (PowerShell 1-Click)" } -ContentType "application/xml"
+  $combinedXml = $accountsXml + "`n" + $vouchersXml + "`n" + $groupSummaryXml
+  Write-Host "Pushing all three reports to Cloud..." -ForegroundColor Yellow
+  $cloudResp = Invoke-RestMethod -Uri $CloudUrl -Method Post -Body $combinedXml -Headers @{ "x-tally-api-key" = $ApiKey; "x-sync-source" = "Office PC (PowerShell 1-Click)" } -ContentType "application/xml" -TimeoutSec 120
   Write-Host "Tally Cloud Sync Successful!" -ForegroundColor Green
   Write-Host $cloudResp
 } catch {
