@@ -731,7 +731,7 @@ try {
   $groupSummaryXml = Get-TallyReport "Group Summary"
   Write-Host "Group Summary (opening/closing balances) received." -ForegroundColor Green
 
-  $combinedXml = $accountsXml + "`n" + $vouchersXml + "`n" + $groupSummaryXml
+  $combinedXml = $accountsXml + [Environment]::NewLine + $vouchersXml + [Environment]::NewLine + $groupSummaryXml
   Write-Host "Pushing all three reports to Cloud..." -ForegroundColor Yellow
   $cloudResp = Invoke-RestMethod -Uri $CloudUrl -Method Post -Body $combinedXml -Headers @{ "x-tally-api-key" = $ApiKey; "x-sync-source" = "Office PC (PowerShell 1-Click)" } -ContentType "application/xml" -TimeoutSec 120
   Write-Host "Tally Cloud Sync Successful!" -ForegroundColor Green
