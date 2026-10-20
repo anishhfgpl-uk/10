@@ -1,0 +1,6 @@
+{
+  "name": "TallySync Cloud - Debtors Ledger & Ageing Analytics",
+  "description": "Cloud sync and analytics platform for Tally Prime & ERP 9. Import debtor groups, view date-wise vouchers, calculate bill-wise ageing analysis, and export professional PDF statements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
